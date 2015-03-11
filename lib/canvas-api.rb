@@ -6,7 +6,7 @@ require 'typhoeus'
 
 module Canvas
   class API
-    def initialize(args={}) 
+    def initialize(args={})
       @host = args[:host] && args[:host].to_s
       @token = args[:token] && args[:token].to_s
       @client_id = args[:client_id] && args[:client_id].to_s
@@ -18,28 +18,28 @@ module Canvas
       raise "token or client_id required" if !@token && !@client_id
       raise "secret required for client_id configuration" if @client_id && !@secret
     end
-  
+
     attr_accessor :host
     attr_accessor :token
     attr_accessor :client_id
-  
+
     def masquerade_as(user_id)
       @as_user_id = user_id && user_id.to_s
     end
-  
+
     def stop_masquerading
       @as_user_id = nil
     end
-  
+
     def self.encode_id(prefix, id)
       return nil unless prefix && id
       "hex:#{prefix}:" + id.to_s.unpack("H*")[0]
     end
-    
+
     def encode_id(prefix, id)
       Canvas::API.encode_id(prefix, id)
     end
-  
+
     def oauth_url(callback_url, scopes="")
       raise "client_id required for oauth flow" unless @client_id
       raise "secret required for oauth flow" unless @secret
@@ -49,11 +49,11 @@ module Canvas
       scopes = scopes.length > 0 ? "&scopes=#{CGI.escape(scopes)}" : ""
       "#{@host}/login/oauth2/auth?client_id=#{@client_id}&response_type=code&redirect_uri=#{CGI.escape(callback_url)}#{scopes}"
     end
-  
+
     def login_url(callback_url)
       oauth_url(callback_url, "/auth/userinfo")
     end
-  
+
     def retrieve_access_token(code, callback_url)
       raise "client_id required for oauth flow" unless @client_id
       raise "secret required for oauth flow" unless @secret
@@ -67,11 +67,11 @@ module Canvas
       end
       res
     end
-  
+
     def logout
       !!delete("/login/oauth2/token")['logged_out']
     end
-  
+
     def validate_call(endpoint)
       raise "token required for api calls" unless @token
       raise "missing host" unless @host
@@ -80,7 +80,7 @@ module Canvas
       raise "invalid endpoint" unless endpoint.match(/^\/api\/v\d+\//) unless @token == 'ignore'
       raise "invalid endpoint" unless (URI.parse(endpoint) rescue nil)
     end
-  
+
     def generate_uri(endpoint, params=nil)
       validate_call(endpoint)
       unless @token == "ignore"
@@ -100,9 +100,10 @@ module Canvas
       @uri = URI.parse(@host + endpoint)
       @http = Net::HTTP.new(@uri.host, @uri.port)
       @http.use_ssl = @uri.scheme == 'https'
+      @http.verify_mode = OpenSSL::SSL::VERIFY_NONE
       @uri
     end
-  
+
     def retrieve_response(request)
       request.options[:headers]['User-Agent'] = "CanvasAPI Ruby"
       if @insecure
@@ -122,7 +123,7 @@ module Canvas
         if !response.code.to_s.match(/2\d\d/)
           json['message'] ||= "unexpected error"
           json['status'] ||= response.code.to_s
-          raise ApiError.new("#{json['status']} #{json['message']}") 
+          raise ApiError.new("#{json['status']} #{json['message']}")
         end
       else
         json = ResultSet.new(self, json)
@@ -133,12 +134,12 @@ module Canvas
       end
       json
     end
-    
+
     # Semi-hack so I can write better specs
     def get_request(endpoint)
       Typhoeus::Request.new(@uri.to_s, method: :get)
     end
-  
+
     def get(endpoint, params=nil)
       generate_uri(endpoint, params)
       request = get_request(endpoint)
@@ -151,14 +152,14 @@ module Canvas
       request.options[:body] = clean_params(params)
       retrieve_response(request)
     end
-  
+
     def put(endpoint, params={})
       generate_uri(endpoint, params['query_parameters'] || params[:query_parameters])
       request = Typhoeus::Request.new(@uri.to_s, method: :put)
       request.options[:body] = clean_params(params)
       retrieve_response(request)
     end
-  
+
     def post(endpoint, params={})
       generate_uri(endpoint, params['query_parameters'] || params[:query_parameters])
       request = Typhoeus::Request.new(@uri.to_s, method: :post)
@@ -194,7 +195,7 @@ module Canvas
       end
       res
     end
-  
+
     def upload_file_from_local(endpoint, file, opts={})
       raise "Missing File object" unless file.is_a?(File)
       params = {
@@ -208,7 +209,7 @@ module Canvas
       elsif opts[:parent_folder_path] || opts['parent_folder_path']
         params[:parent_folder_path] = opts[:parent_folder_path] || opts['parent_folder_path']
       end
-      
+
       res = post(endpoint, params)
       if !res['upload_url']
         raise ApiError.new("Unexpected error: #{res['message'] || 'no upload URL returned'}")
@@ -218,7 +219,7 @@ module Canvas
       res = get(status_path)
       res
     end
-    
+
     def multipart_upload(url, upload_params, params, file)
       req = Typhoeus::Request.new(url, method: :post)
       upload_params.each do |k, v|
@@ -231,7 +232,7 @@ module Canvas
       raise ApiError.new("Unexpected error: #{res.body}") if !res.headers['Location']
       res.headers['Location']
     end
-  
+
     def upload_file_from_url(endpoint, opts)
       asynch = opts.delete('asynch') || opts.delete(:asynch)
       ['url', 'name', 'size'].each do |k|
@@ -273,11 +274,11 @@ module Canvas
     end
     attr_accessor :next_endpoint
     attr_accessor :link
-    
+
     def more?
       !!next_endpoint
     end
-    
+
     def next_page!
       ResultSet.new(@api, []) unless next_endpoint
       more = @api.get(next_endpoint)
